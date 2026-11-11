@@ -1,10 +1,12 @@
-/* Void Swarm — a dependency-free fixed shooter.
+/* Void Swarm — a fixed shooter rendered in 3D.
  *
- * The game runs in a fixed 360x640 portrait coordinate space that is scaled to
- * fit the window, so the same logic works on desktop and on phone screens.
+ * Game logic runs in a flat, fixed 360x640 portrait coordinate space, so it is
+ * independent of screen size. scene3d.js draws that state as a three.js scene;
+ * this file draws the HUD and menus on a transparent 2D canvas layered on top.
  */
+import { createScene3D } from './scene3d.js';
+
 (() => {
-  'use strict';
 
   const W = 360;
   const H = 640;
@@ -12,8 +14,10 @@
   const FONT = 'ui-monospace, Menlo, Consolas, "Courier New", monospace';
   const STORAGE_KEY = 'voidswarm.highscore';
 
-  const canvas = document.getElementById('game');
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('hud');
   const ctx = canvas.getContext('2d');
+  const scene3d = createScene3D(document.getElementById('scene'));
 
   // ---------------------------------------------------------------- helpers
 
@@ -114,12 +118,6 @@
   let enemyFireTimer = 0;
   let diveTimer = 0;
   let waveDelay = 0;
-
-  const stars = [];
-  for (let i = 0; i < 90; i++) {
-    const depth = Math.random();
-    stars.push({ x: rand(0, W), y: rand(0, H), depth, size: depth > 0.75 ? 2 : 1 });
-  }
 
   const keys = Object.create(null);
   const pointer = { down: false, id: null, lastX: 0 };
@@ -529,14 +527,6 @@
     time += dt;
     stateTime += dt;
     shake = Math.max(0, shake - dt);
-    for (const s of stars) {
-      s.y += (12 + s.depth * 50) * dt;
-      if (s.y > H) {
-        s.y = 0;
-        s.x = rand(0, W);
-      }
-    }
-
     if (state === 'paused') return;
     updateParticles(dt);
     if (state !== 'playing') return;
@@ -606,112 +596,8 @@
     ctx.restore();
   }
 
-  function drawPlayer() {
-    if (player.invuln > 0 && Math.floor(time * 14) % 2 === 0) return;
-    // Engine flame
-    ctx.save();
-    glow('#ffb347', 10);
-    ctx.fillStyle = '#ffb347';
-    const f = 5 + Math.sin(time * 40) * 2;
-    ctx.beginPath();
-    ctx.moveTo(player.x - 3, player.y + 8);
-    ctx.lineTo(player.x, player.y + 10 + f);
-    ctx.lineTo(player.x + 3, player.y + 8);
-    ctx.fill();
-    ctx.restore();
-
-    drawShip(player.x, player.y);
-
-    if (player.barrier) {
-      ctx.save();
-      glow('#6fb6ff', 14);
-      ctx.strokeStyle = 'rgba(111,182,255,' + (0.6 + Math.sin(time * 6) * 0.2) + ')';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, 21, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  function drawEnemy(e) {
-    const def = ENEMY_TYPES[e.type];
-    const color = e.flash > 0 ? '#ffffff' : def.color;
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    glow(def.color, 10);
-    ctx.fillStyle = color;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-
-    if (e.type === 'dart') {
-      // Downward-pointing arrowhead with flexing fins.
-      const fin = Math.sin(time * 6 + e.phase) * 2;
-      if (e.mode === 'dive') ctx.rotate(clamp(-e.vx / 400, -0.6, 0.6));
-      ctx.beginPath();
-      ctx.moveTo(0, 11);
-      ctx.lineTo(10 + fin, -8);
-      ctx.lineTo(0, -3);
-      ctx.lineTo(-10 - fin, -8);
-      ctx.closePath();
-      ctx.fill();
-    } else if (e.type === 'orb') {
-      // Ringed core.
-      ctx.beginPath();
-      ctx.arc(0, 0, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 11, 4 + Math.sin(time * 3 + e.phase) * 2, time + e.phase, 0, Math.PI * 2);
-      ctx.stroke();
-    } else {
-      // Armoured hexagon; the inner plate shrinks as it takes damage.
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI / 3) * i + Math.PI / 6;
-        ctx.lineTo(Math.cos(a) * 13, Math.sin(a) * 13);
-      }
-      ctx.closePath();
-      ctx.stroke();
-      const inner = 3 + e.hp * 2;
-      ctx.fillRect(-inner, -inner, inner * 2, inner * 2);
-    }
-    ctx.restore();
-  }
-
-  function drawBoss() {
+  function drawBossBar() {
     if (!boss) return;
-    ctx.save();
-    ctx.translate(boss.x, boss.y);
-    const color = boss.flash > 0 ? '#ffffff' : '#ff5d73';
-    glow('#ff5d73', 18);
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = 3;
-
-    // Rotating outer cage
-    ctx.save();
-    ctx.rotate(boss.t * 0.8);
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = (Math.PI / 4) * i;
-      const r = i % 2 ? 38 : 28;
-      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-
-    // Core
-    ctx.beginPath();
-    ctx.arc(0, 0, 14 + Math.sin(boss.t * 5) * 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#05060f';
-    ctx.beginPath();
-    ctx.arc(0, 3, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Health bar
     const bw = 200;
     const bx = (W - bw) / 2;
     const by = HUD_H + 8;
@@ -721,49 +607,20 @@
     ctx.fillRect(bx, by, bw * Math.max(0, boss.hp / boss.maxHp), 5);
   }
 
-  function drawProjectiles() {
-    ctx.save();
-    glow('#9fe8ff', 8);
-    ctx.fillStyle = '#e6fbff';
-    for (const s of shots) ctx.fillRect(s.x - 1.5, s.y - 7, 3, 12);
-    for (const b of bolts) {
-      glow(b.color, 10);
-      ctx.fillStyle = b.color;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function drawPowerups() {
+  // Power-up letters are drawn on the overlay, pinned to the 3D pickups.
+  function drawPowerupLabels() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.font = 'bold 11px ' + FONT;
     for (const p of powerups) {
-      const def = POWER_TYPES[p.type];
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      glow(def.color, 12);
-      ctx.strokeStyle = def.color;
-      ctx.lineWidth = 2;
-      ctx.save();
-      ctx.rotate(p.t * 2);
-      ctx.strokeRect(-9, -9, 18, 18);
-      ctx.restore();
-      ctx.fillStyle = def.color;
-      ctx.font = 'bold 12px ' + FONT;
-      ctx.fillText(def.label, 0, 1);
-      ctx.restore();
+      const at = scene3d.project(p.x, p.y);
+      ctx.fillStyle = '#05060f';
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(POWER_TYPES[p.type].label, at.x, at.y + 0.5);
     }
-  }
-
-  function drawParticles() {
-    for (const p of particles) {
-      ctx.globalAlpha = Math.max(0, p.life / p.max);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-    }
-    ctx.globalAlpha = 1;
   }
 
   function drawHud() {
@@ -864,7 +721,7 @@
       return;
     }
 
-    ctx.fillStyle = 'rgba(5,6,15,0.72)';
+    ctx.fillStyle = state === 'menu' ? 'rgba(5,6,15,0.35)' : 'rgba(5,6,15,0.6)';
     ctx.fillRect(0, HUD_H, W, H - HUD_H);
     const blink = Math.floor(time * 2) % 2 === 0;
 
@@ -875,7 +732,6 @@
       glow('#5cf2c4', 22);
       centerText('SWARM', 244, 46, '#5cf2c4', true);
       ctx.restore();
-      drawShip(W / 2, 318, 1.6);
       if (blink) centerText('TAP OR PRESS ENTER', 390, 14, '#dff0ff', true);
       centerText('KEYBOARD  ← → move   SPACE fire', 448, 10, '#7f8db3');
       centerText('TOUCH  drag to move, hold to fire', 466, 10, '#7f8db3');
@@ -899,26 +755,13 @@
   }
 
   function render() {
-    ctx.fillStyle = '#05060f';
-    ctx.fillRect(0, 0, W, H);
+    scene3d.render({ state, time, shake, player, enemies, boss, shots, bolts, powerups, particles });
 
-    for (const s of stars) {
-      ctx.fillStyle = 'rgba(190,210,255,' + (0.25 + s.depth * 0.6) + ')';
-      ctx.fillRect(s.x, s.y, s.size, s.size);
-    }
-
-    ctx.save();
-    if (shake > 0) ctx.translate(rand(-1, 1) * shake * 10, rand(-1, 1) * shake * 10);
+    ctx.clearRect(0, 0, W, H);
     if (state !== 'menu') {
-      for (const e of enemies) drawEnemy(e);
-      drawBoss();
-      drawPowerups();
-      drawProjectiles();
-      if (state !== 'gameover') drawPlayer();
+      drawPowerupLabels();
+      drawBossBar();
     }
-    drawParticles();
-    ctx.restore();
-
     drawHud();
     drawOverlay();
   }
@@ -1007,10 +850,13 @@
   function resize() {
     const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    canvas.style.width = Math.floor(W * scale) + 'px';
-    canvas.style.height = Math.floor(H * scale) + 'px';
-    canvas.width = Math.round(W * scale * dpr);
-    canvas.height = Math.round(H * scale * dpr);
+    const cssW = Math.floor(W * scale);
+    const cssH = Math.floor(H * scale);
+    stage.style.width = cssW + 'px';
+    stage.style.height = cssH + 'px';
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    scene3d.resize(cssW, cssH, Math.min(dpr, 2));
     ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
   }
   window.addEventListener('resize', resize);

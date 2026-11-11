@@ -6,9 +6,21 @@
   <meta name="theme-color" content="#05060f">
   <title>Void Swarm</title>
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
 </head>
 <body>
-  <canvas id="game" aria-label="Void Swarm game"></canvas>
-  <script src="game.js"></script>
+  <div id="stage">
+    <canvas id="scene"></canvas>
+    <canvas id="hud" aria-label="Void Swarm game"></canvas>
+  </div>
+  <noscript>Void Swarm needs JavaScript and WebGL.</noscript>
+  <script type="module" src="game.js"></script>
 </body>
 </html>
